@@ -22,7 +22,7 @@ jobs:
             uses: actions/setup-python@v2
             with:
               python-version: 3.8 #install the python needed
-          name: install pip # run the run.py to get the latest data
+          -  name: install pip # run the run.py to get the latest data
             run: |
               apt get update
               apt-get -y install python3-pip
