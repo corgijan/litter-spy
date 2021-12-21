@@ -1,6 +1,5 @@
 import re
 import requests
-from bs4 import BeautifulSoup
 
 
 k= requests.get("https://dabaserv.de/WCP/recordlist.php").text
