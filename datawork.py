@@ -6,4 +6,5 @@ data = """{ "datum":"26.02.2022","rueden":2,"huendinnen":1,"vater":"Ch. Heartbre
 # Hier die Datei Laden ;)
 data="["+data.replace(";",",")[:-1]+"]"
 s = pd.DataFrame(json.loads(data))
-print(s)
+show = pd.DataFrame(json.loads(data)).groupby(['zuechter']).sum()
+print(show)
