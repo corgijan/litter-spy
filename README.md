@@ -1,0 +1,3 @@
+# Litter-Spy
+
+The data.json file contains all litters of Welsh Corgi Pembrokes registered since 2021. Do what you want with it... 
