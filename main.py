@@ -1,8 +1,10 @@
+
 import re
 import requests
 import json
+from bs4 import BeautifulSoup
 
-class Litter():
+class Litter:
     def __init__(self,date,rueden,bitches,name,vater,mutter,zuechter):
         self.date = date.strip()
         self.rueden = rueden.strip()
@@ -10,51 +12,72 @@ class Litter():
         self.vater = vater.strip()
         self.mutter = mutter.strip()
         self.name = name.strip()
-        self.zuechter =zuechter.strip()
+        self.zuechter = zuechter.strip()
 
     def __eq__(self, other):
         return self.date == other.date and self.zuechter == other.zuechter
 
     def __hash__(self):
-        return hash("{"+f""" "datum":"{self.date}","rueden":{self.rueden},"huendinnen":{self.bitches},"vater":"{self.vater}","mutter":"{self.mutter}","name":"{self.name}","zuechter":"{self.zuechter}" """+"}")
+        return hash(self.toJson())
 
     def toJson(self):
-        return "{"+f""" "datum":"{self.date}","rueden":{self.rueden},"huendinnen":{self.bitches},"vater":"{self.vater}","mutter":"{self.mutter}","name":"{self.name}","zuechter":"{self.zuechter}" """+"}"
+        return json.dumps({
+            "datum": self.date,
+            "rueden": int(self.rueden),
+            "huendinnen": int(self.bitches),
+            "vater": self.vater,
+            "mutter": self.mutter,
+            "name": self.name,
+            "zuechter": self.zuechter
+        }, ensure_ascii=False)
 
+# Fetch page
+url = "https://dabaserv.de/fmi/webd/WCP"
+html = requests.get(url).text
 
-k= requests.get("https://dabaserv.de/WCP/recordlist.php").text
+soup = BeautifulSoup(html, "html.parser")
 
-all=set()
-f = open("data.json", "r")
-ss= f.read().split(";")
+# Load old data if exists
+all_litters = set()
+try:
+    with open("data.json", "r", encoding="utf-8") as f:
+        ss = f.read().split(";")
+        for e in ss:
+            if len(e) > 3:
+                o = json.loads(e)
+                all_litters.add(Litter(o["datum"], str(o["rueden"]), str(o["huendinnen"]),
+                                       o["name"], o["vater"], o["mutter"], o["zuechter"]))
+except FileNotFoundError:
+    pass
 
-for e in ss:
-    if len(e)>3:
-        print(e)
-        o= json.loads(e)
-        all.add(Litter(o["datum"],str(o["rueden"]),str(o["huendinnen"]),o["name"],o["vater"],o["mutter"],o["zuechter"]))
+# Regex pattern for the text block
+pat_wurf = re.compile(
+    r"Wurftag:\s*(?P<date>\d{2}\.\d{2}\.\d{4}),\s*Rüden:\s*(?P<rueden>\d+),\s*Hündinnen:\s*(?P<bitches>\d+)"
+    r".*?Vater:\s*(?P<vater>.*?),\s*Mutter:\s*(?P<mutter>.*?)\s*Zuchtstätte:\s*(?P<name>[^,]+),\s*(?P<zuechter>.+)",
+    re.S
+)
 
+# Extract all litter entries from <div class="text">
+for div in soup.find_all("div", class_="text"):
+    text = div.get_text(" ", strip=True)
+    match = pat_wurf.search(text)
+    if match:
+        j = Litter(
+            match.group('date'),
+            match.group('rueden'),
+            match.group('bitches'),
+            match.group('name'),
+            match.group('vater'),
+            match.group('mutter'),
+            match.group('zuechter')
+        )
+        all_litters.add(j)
 
-k = re.sub(r"\s+", " ", k)
-k = re.sub(r"<!DOCTYPE.+\"browseRecords\">", " ", k)
+print("LEN", len(all_litters))
+for l in all_litters:
+    print(l.toJson())
 
-pattern = re.compile(r'<ul> <li> .+?<\/li> <\/ul>')
-for a in re.findall(pattern, k):
-    a=re.sub(r"<.+?>", " ", a)
-    if "(erwartet)" not in a:
-        print(a)
-        pat_wurf = r"Wurftag:.*?(?P<date>\d\d\.\d\d\.\d\d\d\d).*?Rüden:.*?(?P<rueden>\d+).*?Hündinnen:.*?(?P<bitches>\d+).*?Vater:.+?(?P<vater>[\.|'|\w|\s|’|\s]+),.*?Mutter:.*?(?P<mutter>[\.|'|\w|\s|’|\s]+).*?Zuchtstätte:(?P<name>[\.|'|\w|\s|’|\s]+),*?(?P<zuechter>[\.|'|\w|\s|’|\s]+).+?"
-
-        matches = re.search(pat_wurf, a)
-        print(matches)
-        print("Vater: ", matches.group('rueden'))
-        j= Litter(matches.group('date'),matches.group('rueden'),matches.group('bitches'),matches.group('name'),matches.group('vater'),matches.group('mutter'),matches.group('zuechter'))
-        all.add(j)
-
-print("LEN", len(all))
-with open('data.json','r+') as myfile:
-    data = myfile.read()
-    myfile.seek(0)
-    for e in all:
-        myfile.write(e.toJson()+";")
-    myfile.truncate()
+# Save back to file
+with open("data.json", "w", encoding="utf-8") as myfile:
+    for e in all_litters:
+        myfile.write(e.toJson() + ";")
